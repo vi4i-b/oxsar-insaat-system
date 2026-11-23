@@ -3,12 +3,17 @@ import type { AxiosInstance } from 'axios';
 
 export const TOKEN_STORAGE_KEY = 'oxsar_admin_token';
 
+function resolveAdminBaseUrl(rawUrl?: string): string {
+  const base = (rawUrl || 'http://localhost:5000/api').replace(/\/+$/, '');
+  return base.endsWith('/admin') ? base : `${base}/admin`;
+}
+
 const api: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api/admin',
+  baseURL: resolveAdminBaseUrl(import.meta.env.VITE_API_URL),
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 30000,
 });
 
 // Request Interceptor: Token əlavə olunması (API_CONTRACT.md §9.1)

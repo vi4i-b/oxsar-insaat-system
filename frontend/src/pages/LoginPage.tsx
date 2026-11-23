@@ -18,7 +18,7 @@ export const LoginPage: React.FC = () => {
   const toast = useToast();
   const navigate = useNavigate();
 
-  const [phone, setPhone] = useState('+994');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -135,7 +135,7 @@ export const LoginPage: React.FC = () => {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required
-                  placeholder="+994501234567"
+                  placeholder="0500000000 və ya +994501234567"
                   className="w-full rounded-xl border border-slate-300 pl-10 pr-4 py-3 text-sm font-medium text-slate-900 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 outline-none"
                 />
               </div>

@@ -26,81 +26,109 @@ const getWorkers = async (req, res) => {
       orderBy: { created_at: 'asc' },
     });
 
-    const result = await Promise.all(
-      workers.map(async (worker) => {
-        // Son maaş bağlanışını tapırıq
-        const lastSettlement = await prisma.salarySettlement.findFirst({
-          where: { worker_id: worker.id },
-          orderBy: { period_end: 'desc' },
-        });
+    if (workers.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: 'İşçi siyahısı və cari balanslar uğurla gətirildi.',
+        data: [],
+      });
+    }
 
-        const periodStartDate = lastSettlement
-          ? lastSettlement.period_end
-          : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const workerIds = workers.map((w) => w.id);
 
-        // Son bağlanışdan sonrakı qapalı (təsdiqlənmiş) iş günləri
-        const closedLogs = await prisma.dailyLog.findMany({
-          where: {
-            status: 'CLOSED',
-            work_date: {
-              gt: lastSettlement ? lastSettlement.period_end : new Date('2020-01-01'),
-            },
-            OR: [
-              { usta_id: worker.id },
-              { helper_ids: { has: worker.id } },
-            ],
-          },
-          select: { work_date: true },
-          orderBy: { work_date: 'desc' },
-        });
+    // N+1 sorğularının qarşısını almaq üçün bütün əlaqəli məlumatları paralel 3 sorğuda alırıq
+    const [allSettlements, allClosedLogs, allAdvances] = await Promise.all([
+      prisma.salarySettlement.findMany({
+        where: { worker_id: { in: workerIds } },
+        orderBy: { period_end: 'desc' },
+      }),
+      prisma.dailyLog.findMany({
+        where: {
+          status: 'CLOSED',
+          OR: [
+            { usta_id: { in: workerIds } },
+            { helper_ids: { hasSome: workerIds } },
+          ],
+        },
+        select: { usta_id: true, helper_ids: true, work_date: true },
+        orderBy: { work_date: 'desc' },
+      }),
+      prisma.advance.findMany({
+        where: { worker_id: { in: workerIds } },
+        select: { worker_id: true, amount: true, given_date: true },
+      }),
+    ]);
 
-        // Unikal işlənən günlər
-        const uniqueDates = new Set(
-          closedLogs.map((l) => l.work_date.toISOString().slice(0, 10))
-        );
-        const worked_days = uniqueDates.size;
-        const last_worked_date = closedLogs.length > 0
-          ? closedLogs[0].work_date.toISOString().slice(0, 10)
+    const latestSettlementMap = new Map();
+    for (const settlement of allSettlements) {
+      if (!latestSettlementMap.has(settlement.worker_id)) {
+        latestSettlementMap.set(settlement.worker_id, settlement);
+      }
+    }
+
+    const defaultMonthStart = new Date(
+      new Date().getFullYear(),
+      new Date().getMonth(),
+      1
+    );
+    const fallbackCutoff = new Date('2020-01-01');
+
+    const result = workers.map((worker) => {
+      const lastSettlement = latestSettlementMap.get(worker.id) || null;
+      const periodStartDate = lastSettlement
+        ? lastSettlement.period_end
+        : defaultMonthStart;
+      const cutoffTime = (lastSettlement ? lastSettlement.period_end : fallbackCutoff).getTime();
+
+      const workerLogs = allClosedLogs.filter((log) => {
+        const isParticipant =
+          log.usta_id === worker.id ||
+          (Array.isArray(log.helper_ids) && log.helper_ids.includes(worker.id));
+        return isParticipant && log.work_date.getTime() > cutoffTime;
+      });
+
+      const uniqueDates = new Set(
+        workerLogs.map((l) => l.work_date.toISOString().slice(0, 10))
+      );
+      const worked_days = uniqueDates.size;
+      const last_worked_date =
+        workerLogs.length > 0
+          ? workerLogs[0].work_date.toISOString().slice(0, 10)
           : null;
 
-        const gross_salary = Number(worker.daily_wage) * worked_days;
+      const gross_salary = Number(worker.daily_wage) * worked_days;
 
-        // Son bağlanışdan sonra götürülən avanslar
-        const advances = await prisma.advance.findMany({
-          where: {
-            worker_id: worker.id,
-            given_date: {
-              gt: lastSettlement ? lastSettlement.period_end : new Date('2020-01-01'),
-            },
-          },
-          select: { amount: true },
-        });
+      const total_advances = allAdvances
+        .filter(
+          (a) =>
+            a.worker_id === worker.id && a.given_date.getTime() > cutoffTime
+        )
+        .reduce((sum, a) => sum + Number(a.amount), 0);
 
-        const total_advances = advances.reduce((sum, a) => sum + Number(a.amount), 0);
-        const net_balance = gross_salary - total_advances;
+      const net_balance = gross_salary - total_advances;
 
-        const periodStartStr = periodStartDate instanceof Date
+      const periodStartStr =
+        periodStartDate instanceof Date
           ? periodStartDate.toISOString().slice(0, 10)
           : String(periodStartDate).slice(0, 10);
 
-        return {
-          id: worker.id,
-          full_name: worker.full_name,
-          role: worker.role,
-          phone: worker.phone,
-          daily_wage: Number(worker.daily_wage),
-          is_active: worker.is_active,
-          current_period: {
-            period_start: periodStartStr,
-            worked_days,
-            gross_salary,
-            total_advances,
-            net_balance,
-            last_worked_date,
-          },
-        };
-      })
-    );
+      return {
+        id: worker.id,
+        full_name: worker.full_name,
+        role: worker.role,
+        phone: worker.phone,
+        daily_wage: Number(worker.daily_wage),
+        is_active: worker.is_active,
+        current_period: {
+          period_start: periodStartStr,
+          worked_days,
+          gross_salary,
+          total_advances,
+          net_balance,
+          last_worked_date,
+        },
+      };
+    });
 
     return res.status(200).json({
       success: true,

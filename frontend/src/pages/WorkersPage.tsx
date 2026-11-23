@@ -90,8 +90,8 @@ export const WorkersPage: React.FC = () => {
           activeFilter === 'all' ? undefined : activeFilter === 'true',
       });
       setWorkers(res.data);
-    } catch {
-      toast.error('İşçi siyahısı yüklənə bilmədi.');
+    } catch (err) {
+      toast.error((err as ApiError)?.message || 'İşçi siyahısı yüklənə bilmədi.');
     } finally {
       setLoading(false);
     }
@@ -152,7 +152,7 @@ export const WorkersPage: React.FC = () => {
     setWorkerForm({
       full_name: '',
       role: 'USTA',
-      phone: '+994',
+      phone: '',
       daily_wage: '50',
       pin: '',
     });

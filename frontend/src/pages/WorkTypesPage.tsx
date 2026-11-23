@@ -26,8 +26,8 @@ export const WorkTypesPage: React.FC = () => {
     try {
       const res = await workTypesService.list();
       setWorkTypes(res.data);
-    } catch {
-      toast.error('İş növləri kataloqu yüklənə bilmədi.');
+    } catch (err) {
+      toast.error((err as ApiError)?.message || 'İş növləri kataloqu yüklənə bilmədi.');
     } finally {
       setLoading(false);
     }
