@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../config/prisma');
+const { computeWorkerCurrentPeriod } = require('../utils/payroll.helper');
 
 /**
  * GET /api/admin/workers
@@ -28,15 +29,21 @@ const getWorkers = async (req, res) => {
         orderBy: { created_at: 'asc' },
       }),
       prisma.salarySettlement.findMany({
-        orderBy: { period_end: 'desc' },
+        orderBy: { paid_at: 'desc' },
       }),
       prisma.dailyLog.findMany({
         where: { status: 'CLOSED' },
-        select: { usta_id: true, helper_ids: true, work_date: true },
+        select: {
+          usta_id: true,
+          helper_ids: true,
+          work_date: true,
+          created_at: true,
+          updated_at: true,
+        },
         orderBy: { work_date: 'desc' },
       }),
       prisma.advance.findMany({
-        select: { worker_id: true, amount: true, given_date: true },
+        select: { worker_id: true, amount: true, given_date: true, created_at: true },
       }),
     ]);
 
@@ -57,51 +64,14 @@ const getWorkers = async (req, res) => {
       }
     }
 
-    const defaultMonthStart = new Date(
-      new Date().getFullYear(),
-      new Date().getMonth(),
-      1
-    );
-    const fallbackCutoff = new Date('2020-01-01');
-
     const result = workers.map((worker) => {
       const lastSettlement = latestSettlementMap.get(worker.id) || null;
-      const periodStartDate = lastSettlement
-        ? lastSettlement.period_end
-        : defaultMonthStart;
-      const cutoffTime = (lastSettlement ? lastSettlement.period_end : fallbackCutoff).getTime();
-
-      const workerLogs = allClosedLogs.filter((log) => {
-        const isParticipant =
-          log.usta_id === worker.id ||
-          (Array.isArray(log.helper_ids) && log.helper_ids.includes(worker.id));
-        return isParticipant && log.work_date.getTime() > cutoffTime;
-      });
-
-      const uniqueDates = new Set(
-        workerLogs.map((l) => l.work_date.toISOString().slice(0, 10))
+      const current_period = computeWorkerCurrentPeriod(
+        worker,
+        lastSettlement,
+        allClosedLogs,
+        allAdvances
       );
-      const worked_days = uniqueDates.size;
-      const last_worked_date =
-        workerLogs.length > 0
-          ? workerLogs[0].work_date.toISOString().slice(0, 10)
-          : null;
-
-      const gross_salary = Number(worker.daily_wage) * worked_days;
-
-      const total_advances = allAdvances
-        .filter(
-          (a) =>
-            a.worker_id === worker.id && a.given_date.getTime() > cutoffTime
-        )
-        .reduce((sum, a) => sum + Number(a.amount), 0);
-
-      const net_balance = gross_salary - total_advances;
-
-      const periodStartStr =
-        periodStartDate instanceof Date
-          ? periodStartDate.toISOString().slice(0, 10)
-          : String(periodStartDate).slice(0, 10);
 
       return {
         id: worker.id,
@@ -110,14 +80,7 @@ const getWorkers = async (req, res) => {
         phone: worker.phone,
         daily_wage: Number(worker.daily_wage),
         is_active: worker.is_active,
-        current_period: {
-          period_start: periodStartStr,
-          worked_days,
-          gross_salary,
-          total_advances,
-          net_balance,
-          last_worked_date,
-        },
+        current_period,
       };
     });
 
