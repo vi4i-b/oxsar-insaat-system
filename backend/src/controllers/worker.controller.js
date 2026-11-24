@@ -21,10 +21,24 @@ const getWorkers = async (req, res) => {
       whereClause.is_active = is_active === 'true';
     }
 
-    const workers = await prisma.worker.findMany({
-      where: whereClause,
-      orderBy: { created_at: 'asc' },
-    });
+    // 1 şəbəkə dövrəsində paralel 4 sorğu ilə N+1 və əlavə gözləməni aradan qaldırırıq
+    const [workers, allSettlements, allClosedLogs, allAdvances] = await Promise.all([
+      prisma.worker.findMany({
+        where: whereClause,
+        orderBy: { created_at: 'asc' },
+      }),
+      prisma.salarySettlement.findMany({
+        orderBy: { period_end: 'desc' },
+      }),
+      prisma.dailyLog.findMany({
+        where: { status: 'CLOSED' },
+        select: { usta_id: true, helper_ids: true, work_date: true },
+        orderBy: { work_date: 'desc' },
+      }),
+      prisma.advance.findMany({
+        select: { worker_id: true, amount: true, given_date: true },
+      }),
+    ]);
 
     if (workers.length === 0) {
       return res.status(200).json({
@@ -34,34 +48,11 @@ const getWorkers = async (req, res) => {
       });
     }
 
-    const workerIds = workers.map((w) => w.id);
-
-    // N+1 sorğularının qarşısını almaq üçün bütün əlaqəli məlumatları paralel 3 sorğuda alırıq
-    const [allSettlements, allClosedLogs, allAdvances] = await Promise.all([
-      prisma.salarySettlement.findMany({
-        where: { worker_id: { in: workerIds } },
-        orderBy: { period_end: 'desc' },
-      }),
-      prisma.dailyLog.findMany({
-        where: {
-          status: 'CLOSED',
-          OR: [
-            { usta_id: { in: workerIds } },
-            { helper_ids: { hasSome: workerIds } },
-          ],
-        },
-        select: { usta_id: true, helper_ids: true, work_date: true },
-        orderBy: { work_date: 'desc' },
-      }),
-      prisma.advance.findMany({
-        where: { worker_id: { in: workerIds } },
-        select: { worker_id: true, amount: true, given_date: true },
-      }),
-    ]);
+    const workerIdSet = new Set(workers.map((w) => w.id));
 
     const latestSettlementMap = new Map();
     for (const settlement of allSettlements) {
-      if (!latestSettlementMap.has(settlement.worker_id)) {
+      if (workerIdSet.has(settlement.worker_id) && !latestSettlementMap.has(settlement.worker_id)) {
         latestSettlementMap.set(settlement.worker_id, settlement);
       }
     }

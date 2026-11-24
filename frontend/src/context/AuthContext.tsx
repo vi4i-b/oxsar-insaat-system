@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { authService } from '../api/authService';
 import { TOKEN_STORAGE_KEY } from '../api/axiosClient';
 import type { AdminProfile, LoginRequest } from '../types/api';
@@ -53,17 +53,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAdmin(null);
   }, []);
 
+  const contextValue = useMemo(
+    () => ({
+      admin,
+      loading,
+      isAuthenticated: Boolean(admin),
+      login,
+      logout,
+      refreshProfile,
+    }),
+    [admin, loading, login, logout, refreshProfile]
+  );
+
   return (
-    <AuthContext.Provider
-      value={{
-        admin,
-        loading,
-        isAuthenticated: Boolean(admin),
-        login,
-        logout,
-        refreshProfile,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

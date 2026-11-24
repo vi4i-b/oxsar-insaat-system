@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, AlertTriangle, Info, X } from 'lucide-react';
 
 type ToastVariant = 'success' | 'error' | 'info';
@@ -20,16 +20,42 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const timersRef = useRef<Map<number, number>>(new Map());
 
   const removeToast = useCallback((id: number) => {
+    const timer = timersRef.current.get(id);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
     setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+      timers.clear();
+    };
   }, []);
 
   const showToast = useCallback(
     (message: string, variant: ToastVariant = 'info') => {
       const id = Date.now() + Math.random();
-      setToasts((prev) => [...prev, { id, message, variant }]);
-      setTimeout(() => removeToast(id), 4200);
+      let added = false;
+
+      setToasts((prev) => {
+        if (prev.some((t) => t.message === message && t.variant === variant)) {
+          return prev;
+        }
+        added = true;
+        return [...prev, { id, message, variant }].slice(-4);
+      });
+
+      if (added) {
+        const timer = window.setTimeout(() => removeToast(id), 4200);
+        timersRef.current.set(id, timer);
+      }
     },
     [removeToast]
   );
@@ -38,8 +64,13 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const error = useCallback((msg: string) => showToast(msg, 'error'), [showToast]);
   const info = useCallback((msg: string) => showToast(msg, 'info'), [showToast]);
 
+  const contextValue = useMemo(
+    () => ({ showToast, success, error, info }),
+    [showToast, success, error, info]
+  );
+
   return (
-    <ToastContext.Provider value={{ showToast, success, error, info }}>
+    <ToastContext.Provider value={contextValue}>
       {children}
       <div
         aria-live="polite"
