@@ -1,6 +1,6 @@
-# Oxşar İnşaat — Müdir Portalı Frontend (`/admin`)
+# Oxşar İnşaat — Frontend (`/admin` & `/usta`)
 
-`docs/API_CONTRACT.md` (v1.0.0) sənədinə uyğun hazırlanmış **React + TypeScript + Vite + Tailwind CSS** Müdir Portalı.
+`docs/API_CONTRACT.md` və `docs/USTA_API_CONTRACT.md` sənədlərinə 100% uyğun hazırlanmış **React + TypeScript + Vite + Tailwind CSS** vahid frontend tətbiqi.
 
 ## İşə Salma
 
@@ -11,22 +11,24 @@ npm install
 npm run dev
 ```
 
-Brauzerdə açılır: `http://localhost:5173/admin/login`
+- **Müdir Portalı (`/admin`):** `http://localhost:5173/admin/login`
+- **İşçi / Usta Sahə Portalı (`/usta`):** `http://localhost:5173/usta/login`
 
-## Backend İnteqrasiyası (`API_CONTRACT.md`)
+## Backend İnteqrasiyası
 
-- **Baza URL:** `VITE_API_URL` (default: `http://localhost:5000/api/admin`)
-- **JWT Token açarı:** `localStorage` → `oxsar_admin_token`
-- **Request Header:** `Authorization: Bearer <token>`
-- **401 Xəta İdarəetməsi:** Token silinir və `/admin/login` səhifəsinə yönləndirilir
+- **Baza URL (`VITE_API_URL`):** `http://localhost:5000/api`
+  - Müdir sorğuları avtomatik `/api/admin/*` ünvanına gedir (`localStorage`: `oxsar_admin_token`)
+  - Usta sorğuları avtomatik `/api/usta/*` ünvanına gedir (`localStorage`: `oxsar_usta_token`)
 
-## İnteqrasiya Edilmiş Modullar (25 Endpoint)
+## Hazır Portallar
 
-1. **Auth (`POST /login`, `GET /me`)** — JWT giriş, F5 sessiya yoxlanışı, 401 avtomatik yönləndirmə
-2. **Analitika (`GET /analytics/summary`)** — KPI kartları, tarix filtri, gəlir-xərc-mənfəət qrafiki və layihə rentabellik cədvəli
-3. **Layihələr & Təkliflər (`GET/POST/PUT/DELETE /projects`, `PATCH /projects/:id/status`)** — Təklif generatoru, canlı m²/gün/qiymət kalkulyatoru, WhatsApp Magic-Link paylaşımı, çap edilə bilən PDF təklif, məcburi `pause_reason`
-4. **Gündəlik Kamera Hesabatları (`PATCH /daily-logs/:id`)** — Səhər/axşam foto baxışı və min. 10 simvol audit səbəbli Müdir m² düzəlişi
-5. **Obyekt Materialları (`GET/POST /projects/:projectId/materials`, `DELETE /materials/:id`)** — Maya dəyəri uçotu
-6. **İşçilər, Avans və Maaş (`GET/POST/PUT /workers`, `PATCH /toggle-active`, `POST /advances`, `GET /workers/:id/advances`, `POST /workers/:id/settle`, `GET /salary-settlements`)** — 4 rəqəmli Usta PIN, sürətli `+ Avans Ver`, dövr bağlanışı və arxiv
-7. **İş Növləri & Normativlər (`GET/POST/PUT /work-types`)** — Gündəlik m² normaları və baza qiymətləri
-8. **Audit Jurnalı (`GET /audit-logs`)** — Cədvəl filtri və səhifələmə ilə tam təhlükəsizlik jurnalı
+### 1. Müdir Portalı (`/admin`) — 25 Endpoint (`docs/API_CONTRACT.md`)
+- Analitika Dashboard, Layihələr & 5 dəqiqəlik PDF/WhatsApp Təklif Generatoru, Gündəlik Kamera Loqlarına Müdir düzəlişi, Obyekt Materialları, İşçilər/Avans/Maaş bağlanışı, İş Növləri & Normativlər, Audit Jurnalı.
+
+### 2. İşçi (Usta) Mobil Portalı (`/usta`) — 9 Endpoint (`docs/USTA_API_CONTRACT.md`)
+- **4 Rəqəmli PIN Girişi (`/usta/login`):** Sahə üçün iri sensor düyməli rəqəm klaviaturası.
+- **Gündəlik Sahə İcrası (`/usta`):**
+  - **Səhər Çekini (`İŞƏ BAŞLADIM`):** Yalnız `AKTIV` obyektlər, dinamik briqada köməkçisi seçimi və WebRTC **Canlı Kamera Audit Kilidi** (qalereya bağlıdır, foto üzərinə `Asia/Baku` zaman damğası vurulur və ya maks. 10 san. video çəkilir).
+  - **Axşam Çekini (`İŞ GÜNÜNÜ BİTİR`):** Mərhələ seçimi, qalıq həcmdən artıq m² kilidi (`EXCEEDS_STAGE_REMAINING_M2`), normadan aşağı icra xəbərdarlığı, material qeydi və canlı kamera kilidi.
+  - **Müştəri OTP Təhvil Kilidi:** 100% bitmiş obyekti müştərinin 4 rəqəmli OTP kodu ilə `TAMAMLANDI` statusuna bağlamaq.
+- **Mənim Hesabım (`/usta/wallet`):** Yalnız oxuma (`Read-Only`) rejimində cari dövr üzrə işlənmiş günlər, ümumi maaş, götürülmüş avanslar, xalis qalıq və keçmiş ödənişlər arxivi.

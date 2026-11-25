@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Droplets,
   Lock,
@@ -175,6 +175,15 @@ export const LoginPage: React.FC = () => {
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
+
+          <div className="mt-6 pt-4 border-t border-slate-100 text-center">
+            <Link
+              to="/usta/login"
+              className="text-xs font-semibold text-slate-500 hover:text-sky-600 transition-colors"
+            >
+              İşçi (Usta) Sahə Portalına keçid →
+            </Link>
+          </div>
         </div>
       </div>
     </div>
